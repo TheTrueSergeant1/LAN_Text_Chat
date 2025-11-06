@@ -1,0 +1,1583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalChat Pro - Enterprise Edition</title>
+
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap">
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
+    
+    <style>
+        /* Base styles and Dark Mode Colors - Adjusted for a sleeker, darker palette */
+        :root {
+            --color-primary-dark: #0f1014; /* Near-black for main background */
+            --color-secondary-dark: #181b21; /* Slightly lighter for sidebars/panels */
+            --color-tertiary-dark: #23272d; /* Accent for inputs/hovers */
+            --color-brand: #4f46e5;
+            --color-dm: #8b5cf6;
+        }
+        body { 
+            transition: background-color 0.3s, color 0.3s; 
+            overflow: hidden; 
+            font-family: 'Inter', sans-serif; 
+        }
+        .dark body { 
+            background-color: var(--color-primary-dark); 
+            color: #e5e7eb; /* Lighter text for contrast */
+        }
+
+        /* Custom Scrollbar Styling for Sleek look */
+        #messages, #active-users-list, #channel-list, #dm-list { 
+            scrollbar-width: thin;
+            scrollbar-color: var(--color-brand) var(--color-tertiary-dark);
+        }
+        #messages::-webkit-scrollbar, #active-users-list::-webkit-scrollbar, #channel-list::-webkit-scrollbar, #dm-list::-webkit-scrollbar { width: 8px; }
+        .dark #messages::-webkit-scrollbar-thumb, .dark #active-users-list::-webkit-scrollbar-thumb, .dark #channel-list::-webkit-scrollbar-thumb, .dark #dm-list::-webkit-scrollbar-thumb { 
+            background-color: #4f46e5; 
+            border-radius: 4px; 
+            border: 2px solid var(--color-secondary-dark); 
+        }
+        .dark #messages::-webkit-scrollbar-track, .dark #active-users-list::-webkit-scrollbar-track, .dark #channel-list::-webkit-scrollbar-track, .dark #dm-list::-webkit-scrollbar-track { 
+            background-color: var(--color-secondary-dark); 
+        }
+
+        /* Markdown Styling (Code Blocks, Inline Code) */
+        .markdown-content pre { 
+            background-color: #1f2937; 
+            color: #f3f4f6; 
+            padding: 0.75rem; 
+            border-radius: 0.75rem; 
+            overflow-x: auto; 
+            font-size: 0.875rem; 
+            margin-top: 0.5rem;
+            border: 1px solid #374151; 
+        }
+        /* Code Syntax Highlighting Simulation */
+        .markdown-content pre code {
+            display: block;
+            padding: 0 !important;
+            background: none !important;
+            color: inherit !important;
+            font-family: monospace;
+            white-space: pre;
+        }
+        .markdown-content code:not(pre code) { 
+            background-color: #e5e7eb; 
+            color: #1f2937; 
+            padding: 0.1rem 0.3rem; 
+            border-radius: 0.375rem; 
+            font-family: 'Inter', monospace; 
+            font-size: 0.875rem; 
+        }
+        .dark .markdown-content code:not(pre code) { 
+            background-color: #374151; 
+            color: #f3f4f6; 
+        }
+
+        /* Message Context Menu & Mentions - Made Context Menu more subtle until hover */
+        .message-content-box { position: relative; }
+        .message-content-box:hover .context-menu { opacity: 1; transform: translateY(0); }
+        .context-menu {
+            transition: all 0.2s ease-out;
+            transform: translateY(-5px);
+            pointer-events: auto; 
+        }
+        
+        .mentioned { 
+            background-color: rgba(252, 211, 77, 0.15) !important; 
+            color: inherit !important; 
+            border: 2px solid #fcd34d !important; 
+            animation: pulse-mention 1s ease-in-out; 
+            padding: 1rem !important;
+            border-radius: 1.5rem !important;
+            margin: -0.5rem;
+        }
+        @keyframes pulse-mention { 
+            0% { box-shadow: 0 0 0 0 rgba(252, 211, 77, 0.5); } 
+            70% { box-shadow: 0 0 0 10px rgba(252, 211, 77, 0); } 
+            100% { box-shadow: 0 0 0 0 rgba(252, 211, 77, 0); } 
+        }
+        .hidden-by-filter { display: none !important; }
+        
+        /* Reaction Menu Fix: Position absolutely over the page, styled for premium look */
+        .reaction-menu-container { position: relative; } 
+        .reaction-menu {
+            position: absolute;
+            bottom: 100%; 
+            right: 0; 
+            margin-bottom: 12px; 
+            z-index: 50; 
+            display: none; 
+            flex-wrap: wrap; 
+            max-width: 280px; 
+            padding: 0.5rem; 
+            border-radius: 1rem; 
+        }
+        .reaction-menu.active { display: flex !important; } 
+
+        /* Custom chat bubble styling */
+        .message-bubble {
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+        }
+        .dark .message-bubble {
+            box-shadow: 0 1px 3px 0 rgba(255, 255, 255, 0.05), 0 1px 2px -1px rgba(255, 255, 255, 0.05);
+        }
+
+        /* Thread/Reply Indicator Styling */
+        .reply-context {
+            border-left: 4px solid var(--color-brand);
+            padding-left: 0.75rem;
+            margin-bottom: 0.5rem;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        .reply-context:hover {
+            opacity: 1;
+        }
+    </style>
+    <script>
+        tailwind.config = {
+            darkMode: 'class', 
+            theme: { 
+                extend: { 
+                    fontFamily: { 
+                        sans: ['Inter', 'sans-serif'] 
+                    },
+                    colors: { 
+                        // Adjusted colors for a professional, deeper look
+                        'primary-dark': '#0f1014', 
+                        'secondary-dark': '#181b21',
+                        'tertiary-dark': '#23272d',
+                        'brand-indigo': '#4f46e5',
+                        'brand-purple': '#8b5cf6' 
+                    },
+                    borderRadius: {
+                        'xl': '1rem', // More rounded standard
+                        '2xl': '1.5rem', // Larger rounded corners
+                        '3xl': '2rem'
+                    },
+                    boxShadow: {
+                        '3xl': '0 35px 60px -15px rgba(0, 0, 0, 0.3)',
+                        'inner-lg': 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.15)'
+                    }
+                } 
+            }
+        }
+    </script>
+</head>
+<body class="bg-gray-100 dark:bg-primary-dark text-gray-900 dark:text-gray-100 font-sans h-screen flex flex-col antialiased">
+
+    <div id="notification-toast" class="fixed top-6 right-6 bg-brand-indigo text-white p-4 rounded-xl shadow-3xl hidden z-50 transition duration-500 transform translate-x-1/2 opacity-0 min-w-[250px]">
+        <p id="notification-text" class="font-semibold"></p>
+    </div>
+
+    <div id="login-modal" class="fixed inset-0 bg-gray-900/90 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white dark:bg-secondary-dark p-10 rounded-3xl shadow-3xl w-full max-w-lg transform transition-all duration-500 border border-gray-200 dark:border-gray-800">
+            <h2 class="text-4xl font-extrabold mb-2 text-center text-brand-indigo dark:text-indigo-400">LocalChat <span class="text-brand-purple">Pro</span> 🚀</h2>
+            <p class="text-sm text-gray-500 dark:text-gray-400 mb-8 text-center">Securely connect to your private network server. Your digital workspace.</p>
+            
+            <input type="text" id="username-input" placeholder="Username (admin- for Admin role)" 
+                    class="w-full p-4 mb-4 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-brand-indigo focus:border-brand-indigo bg-gray-50 dark:bg-tertiary-dark dark:text-gray-100 transition shadow-inner-lg" 
+                    maxlength="20" required>
+            <input type="password" id="password-input" placeholder="Password" 
+                    class="w-full p-4 mb-4 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-brand-indigo focus:border-brand-indigo bg-gray-50 dark:bg-tertiary-dark dark:text-gray-100 transition shadow-inner-lg" 
+                    required>
+            <input type="text" id="server-ip-input" placeholder="Server IP (e.g., 10.0.0.100)" 
+                    class="w-full p-4 mb-8 border border-gray-300 dark:border-gray-700 rounded-xl focus:ring-brand-indigo focus:border-brand-indigo bg-gray-50 dark:bg-tertiary-dark dark:text-gray-100 transition shadow-inner-lg" 
+                    value="10.0.0.100" required>
+            
+            <div class="flex space-x-4">
+                <button id="register-button" 
+                        class="flex-1 bg-gray-600 hover:bg-gray-700 text-white font-extrabold py-4 rounded-xl transition duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.01]">
+                    Register
+                </button>
+                <button id="login-button" 
+                        class="flex-1 bg-brand-indigo hover:bg-indigo-700 text-white font-extrabold py-4 rounded-xl transition duration-300 shadow-lg hover:shadow-xl transform hover:scale-[1.01]">
+                    Login
+                </button>
+            </div>
+            <p id="error-message" class="text-red-500 text-sm mt-4 text-center font-medium hidden"></p>
+        </div>
+    </div>
+    
+    <div id="edit-modal" class="fixed inset-0 bg-gray-900/75 z-40 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white dark:bg-secondary-dark p-8 rounded-2xl shadow-3xl w-full max-w-lg border border-gray-200 dark:border-gray-700">
+            <h2 class="text-2xl font-bold mb-4 text-brand-indigo dark:text-indigo-400">Edit Message</h2>
+            <textarea id="edit-input" rows="4" 
+                    class="w-full p-4 mb-6 border border-gray-300 dark:border-gray-600 rounded-xl focus:ring-brand-indigo focus:border-brand-indigo bg-gray-50 dark:bg-tertiary-dark dark:text-gray-100 transition shadow-inner" 
+                    maxlength="2000"></textarea>
+            <div class="flex justify-end space-x-3">
+                <button id="cancel-edit-button" 
+                            class="px-5 py-2.5 bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 font-semibold rounded-xl transition duration-150 transform hover:scale-[1.02]">
+                    Cancel
+                </button>
+                <button id="save-edit-button" 
+                            class="px-5 py-2.5 bg-brand-indigo hover:bg-indigo-700 text-white font-semibold rounded-xl transition duration-150 transform hover:scale-[1.02]">
+                    Save Changes
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div id="channel-modal" class="fixed inset-0 bg-gray-900/75 z-40 hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div class="bg-white dark:bg-secondary-dark p-8 rounded-2xl shadow-3xl w-full max-w-lg border border-gray-200 dark:border-gray-700 relative">
+            <h2 class="text-3xl font-bold mb-6 text-brand-indigo dark:text-indigo-400">Manage Channels</h2>
+            
+            <div class="mb-8 p-4 border border-gray-300 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-tertiary-dark/50">
+                <h3 class="text-xl font-semibold mb-3">Create New Channel</h3>
+                <input type="text" id="new-channel-name" placeholder="#channel-name (no spaces/special chars)" 
+                        class="w-full p-3 mb-4 border border-gray-300 dark:border-gray-700 rounded-lg dark:bg-tertiary-dark shadow-inner focus:ring-brand-indigo focus:border-brand-indigo">
+                <div class="flex items-center justify-between mb-4">
+                    <label for="new-channel-private" class="text-sm flex items-center cursor-pointer">
+                        <input type="checkbox" id="new-channel-private" class="rounded text-brand-indigo focus:ring-brand-indigo dark:bg-gray-700 h-5 w-5 mr-2">
+                        Private (Invite-only)
+                    </label>
+                    <button id="create-channel-button" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-xl transition shadow-md">Create Channel</button>
+                </div>
+            </div>
+
+            <div class="p-4 border border-gray-300 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-tertiary-dark/50">
+                <h3 class="text-xl font-semibold mb-3">Join Private Channel</h3>
+                <div class="flex space-x-3">
+                    <input type="text" id="join-invite-code" placeholder="Enter Invite Code" 
+                            class="flex-1 p-3 border border-gray-300 dark:border-gray-700 rounded-lg dark:bg-tertiary-dark shadow-inner focus:ring-brand-indigo focus:border-brand-indigo">
+                    <button id="join-channel-button" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-xl transition shadow-md">Join</button>
+                </div>
+            </div>
+            
+            <button id="close-channel-modal" class="absolute top-4 right-4 text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition p-2 rounded-full hover:bg-gray-200 dark:hover:bg-tertiary-dark">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+        </div>
+    </div>
+
+
+    <div id="main-app" class="flex flex-col lg:flex-row flex-1 h-screen hidden">
+
+        <div id="mobile-overlay" class="fixed inset-0 bg-gray-900/75 z-20 hidden lg:hidden transition-opacity duration-300" onclick="app.toggleSidebar(false)"></div>
+
+        <div id="sidebar" class="fixed inset-y-0 left-0 w-72 bg-gray-200 dark:bg-secondary-dark p-6 flex-shrink-0 flex flex-col shadow-2xl transition-transform duration-500 z-30 transform -translate-x-full lg:static lg:translate-x-0 lg:w-72 lg:border-r border-gray-300 dark:border-gray-800">
+            <div class="flex items-center justify-between mb-8 pb-4 border-b border-gray-300 dark:border-gray-700">
+                 <h1 class="text-2xl font-extrabold text-brand-indigo dark:text-indigo-400 tracking-widest">LOCALCHAT</h1>
+                 <div class="flex items-center space-x-2">
+                    <button id="theme-toggle" class="p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-tertiary-dark transition shadow-inner">
+                         </button>
+                    <button id="close-sidebar-mobile" onclick="app.toggleSidebar(false)" class="lg:hidden p-1 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-tertiary-dark rounded-full transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                 </div>
+            </div>
+            
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-xs font-bold uppercase text-gray-500 dark:text-gray-400 tracking-wider">Channels</h2>
+                <button id="open-channel-modal" class="p-1.5 rounded-full bg-brand-indigo hover:bg-indigo-700 text-white font-bold transition shadow-md" title="Create/Join Channel">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m-8-8h16" /></svg>
+                </button>
+            </div>
+            <div id="channel-list" class="space-y-1 mb-6 max-h-[30vh] overflow-y-auto"></div>
+            
+            <h2 class="text-xs font-bold uppercase text-gray-500 dark:text-gray-400 mb-3 tracking-wider">Direct Messages</h2>
+            <div id="dm-list" class="space-y-1 mb-8 max-h-[30vh] overflow-y-auto">
+                <p class="text-gray-500 dark:text-gray-400 text-sm italic p-2 rounded-lg bg-gray-300/50 dark:bg-tertiary-dark/50">Click an active user to start a DM.</p>
+            </div>
+
+            <div class="mt-auto pt-6 border-t border-gray-300 dark:border-gray-700">
+                <div class="flex items-center justify-between mb-3 p-3 bg-gray-300 dark:bg-tertiary-dark rounded-xl shadow-inner">
+                    <div class="flex flex-col">
+                        <p id="current-user" class="font-bold text-lg truncate text-gray-800 dark:text-gray-100"></p>
+                        <p class="text-xs text-gray-500 dark:text-gray-400 truncate" title="Your Persistent ID">ID: <span id="persistent-id"></span></p>
+                    </div>
+                    <span id="user-role" class="text-xs font-semibold px-3 py-1 rounded-full bg-gray-300 dark:bg-gray-700">User</span>
+                </div>
+
+                <div class="relative mt-3">
+                    <select id="status-selector" class="w-full p-3 text-sm rounded-xl bg-gray-300 dark:bg-gray-700 dark:text-gray-100 transition appearance-none cursor-pointer border-2 border-transparent focus:border-brand-indigo shadow-md">
+                        <option value="online">🟢 Online</option>
+                        <option value="away">🟡 Away</option>
+                        <option value="dnd">🔴 Do Not Disturb</option>
+                    </select>
+                    <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-700 dark:text-gray-300">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                    </div>
+                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-2">Server Status: <span id="connection-status" class="text-red-500 font-semibold transition-colors duration-300">Disconnected</span></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex-1 flex flex-col overflow-hidden bg-white dark:bg-primary-dark transition-colors duration-300">
+            
+            <header class="p-4 lg:px-6 bg-white dark:bg-secondary-dark border-b border-gray-200 dark:border-gray-800 shadow-lg flex items-center justify-between flex-shrink-0 transition-colors duration-300 z-10">
+                <div class="flex items-center space-x-3">
+                    <button id="open-sidebar-mobile" onclick="app.toggleSidebar(true)" class="lg:hidden p-2 rounded-full text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-tertiary-dark transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+                    </button>
+                    <h2 id="current-channel-display" class="text-2xl lg:text-3xl font-extrabold text-brand-indigo dark:text-indigo-400 transition-colors duration-300">#general</h2>
+                    <span id="channel-type-icon" class="text-sm text-gray-500 dark:text-gray-400 ml-2"></span>
+                </div>
+                
+                <div class="flex items-center space-x-4 text-sm text-gray-500 dark:text-gray-400">
+                    <span id="users-online" class="font-semibold text-brand-indigo dark:text-indigo-400 hidden sm:inline text-base">0 users online</span>
+                </div>
+            </header>
+
+            <div id="pinned-banner" class="bg-yellow-500/10 dark:bg-yellow-400/10 border-b-4 border-yellow-500 dark:border-yellow-400 p-3 text-sm hidden flex-shrink-0 items-center justify-between transition-all duration-300 shadow-inner">
+                <p class="truncate font-medium text-yellow-800 dark:text-yellow-200 flex items-center">
+                    <span class="text-xl mr-2">📌</span> Pinned Message: <span id="pinned-content" class="ml-2 italic font-normal text-gray-700 dark:text-gray-300"></span>
+                </p>
+                <button id="jump-to-pinned" class="ml-4 text-yellow-700 dark:text-yellow-300 hover:underline text-sm font-bold px-3 py-1 rounded-lg hover:bg-yellow-200 dark:hover:bg-yellow-900 transition">Jump to</button>
+            </div>
+
+            <div id="messages-container" class="flex-1 px-4 lg:px-6 overflow-hidden">
+                <div id="messages" class="h-full space-y-6 pt-6 pb-4 overflow-y-auto"></div>
+            </div>
+
+            <div class="p-4 lg:p-6 bg-white dark:bg-secondary-dark border-t border-gray-200 dark:border-gray-800 flex-shrink-0 transition-colors duration-300 shadow-2xl">
+                <div id="reply-context-area" class="flex items-center justify-between p-3 mb-2 bg-gray-200 dark:bg-tertiary-dark rounded-xl hidden">
+                    <div class="flex items-center space-x-2 truncate">
+                        <span class="font-semibold text-brand-indigo dark:text-indigo-400">Replying to:</span>
+                        <span id="reply-target-content" class="text-sm italic truncate"></span>
+                    </div>
+                    <button id="cancel-reply-button" class="text-gray-500 hover:text-red-500 transition p-1 rounded-full hover:bg-gray-300 dark:hover:bg-gray-600">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                    </button>
+                </div>
+                
+                <div id="typing-indicator" class="text-sm text-gray-500 dark:text-gray-400 h-6 flex items-center mb-2 px-1 hidden transition-opacity duration-300"></div>
+                
+                <div class="flex items-center space-x-4 relative">
+                    <input type="file" id="file-input" class="hidden" accept="image/*, text/plain, application/pdf">
+                    <button id="file-button" 
+                            class="p-4 rounded-xl bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-100 transition duration-200 shadow-lg disabled:opacity-50"
+                            disabled title="Attach File (Max 5MB)">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13.5" /></svg>
+                    </button>
+
+                    <input type="text" id="message-input" placeholder="Message #general... (Type '/' for commands or type to describe file)" 
+                            class="flex-1 p-4 border-2 border-gray-300 dark:border-gray-600 rounded-2xl focus:ring-brand-indigo focus:border-brand-indigo bg-gray-50 dark:bg-tertiary-dark dark:text-gray-100 disabled:opacity-50 transition shadow-inner-lg"
+                            maxlength="2000" disabled>
+                            
+                    <div id="command-help" class="absolute bottom-full mb-4 left-0 w-full bg-white dark:bg-tertiary-dark p-4 rounded-xl shadow-2xl border border-gray-300 dark:border-gray-700 hidden z-20">
+                        <p class="text-sm font-bold mb-2 text-brand-indigo dark:text-indigo-400">Available Commands:</p>
+                        <ul class="text-xs space-y-1 dark:text-gray-300">
+                            <li><code class="font-mono bg-gray-200 dark:bg-gray-700 px-1 rounded">/status [online|away|dnd]</code> - Set your user status.</li>
+                            <li><code class="font-mono bg-gray-200 dark:bg-gray-700 px-1 rounded">/pin [messageId]</code> - (Admin) Pin a message.</li>
+                            <li><code class="font-mono bg-gray-200 dark:bg-gray-700 px-1 rounded">/unpin</code> - (Admin) Unpin the current message.</li>
+                            <li><code class="font-mono bg-gray-200 dark:bg-gray-700 px-1 rounded">/kick [username]</code> - (Admin) Disconnect a user.</li>
+                            <li><code class="font-mono bg-gray-200 dark:bg-gray-700 px-1 rounded">/ban [username]</code> - (Admin) Permanently block a user.</li>
+                        </ul>
+                    </div>
+
+                    <button id="send-button" 
+                            class="bg-brand-indigo hover:bg-indigo-700 text-white font-semibold p-4 rounded-xl transition duration-200 shadow-lg transform hover:scale-[1.05] disabled:bg-indigo-400 disabled:cursor-not-allowed">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" /></svg>
+                    </button>
+                </div>
+
+                <div id="upload-progress-bar" class="w-full h-2 bg-gray-300 dark:bg-gray-700 mt-3 rounded-full hidden shadow-inner">
+                    <div id="upload-progress" class="h-2 bg-green-500 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+                
+                <div id="channel-active-users" class="text-xs text-gray-500 dark:text-gray-400 mt-3 truncate p-1"></div>
+            </div>
+        </div>
+
+        <div class="w-64 bg-gray-200 dark:bg-secondary-dark p-6 flex-shrink-0 flex flex-col shadow-2xl transition-colors duration-300 border-l border-gray-300 dark:border-gray-800 hidden lg:flex">
+            <h2 class="text-xs font-bold uppercase text-brand-indigo dark:text-indigo-400 mb-6 tracking-wider">Users Online</h2>
+            <div id="active-users-list" class="space-y-2 overflow-y-auto flex-1">
+                <p class="text-gray-500 dark:text-gray-400 text-sm italic p-2 rounded-lg bg-gray-300/50 dark:bg-tertiary-dark/50">Connect to see users.</p>
+            </div>
+            
+            <div class="mt-6 pt-6 border-t border-gray-300 dark:border-gray-700">
+                 <h2 class="text-xs font-bold uppercase text-gray-500 dark:text-gray-400 mb-3 tracking-wider">Search/Filter</h2>
+                 <input type="text" id="message-filter-input" placeholder="Filter messages in chat..."
+                                 class="w-full p-3 text-sm border-2 border-gray-300 dark:border-gray-700 rounded-xl focus:ring-brand-indigo focus:border-brand-indigo bg-gray-50 dark:bg-tertiary-dark dark:text-gray-100 transition shadow-inner-lg">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        
+        // --- GLOBAL UTILITY FUNCTIONS (Moved outside the app object for reliability) ---
+        
+        const formatTime = (timestamp, full = false) => {
+            const date = new Date(timestamp);
+            return full ? date.toLocaleString() : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        };
+        
+        const showNotification = function(text, isError = false) {
+            const toast = document.getElementById('notification-toast');
+            const toastText = document.getElementById('notification-text');
+            
+            toast.classList.remove('bg-brand-indigo', 'bg-red-600');
+            toast.classList.add(isError ? 'bg-red-600' : 'bg-brand-indigo');
+            
+            toastText.textContent = text;
+            toast.classList.remove('hidden', 'translate-x-1/2', 'opacity-0');
+            toast.classList.add('translate-x-0', 'opacity-100');
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-x-0', 'opacity-100');
+                toast.classList.add('translate-x-1/2', 'opacity-0');
+            }, 5000);
+        };
+
+        const showError = function(message) {
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+            setTimeout(() => errorMessage.classList.add('hidden'), 5000);
+        };
+
+        const initTheme = function() {
+            const isDark = localStorage.getItem('theme') === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches);
+            if (isDark) document.documentElement.classList.add('dark');
+            app.updateThemeToggle(isDark);
+        };
+
+        // --- END GLOBAL UTILITY FUNCTIONS ---
+
+        const app = {
+            // --- Core State ---
+            ws: null,
+            userId: null,
+            username: null,
+            userRole: 'Guest',
+            serverIp: '10.0.0.100',
+            currentChannel: '#general',
+            channels: [], 
+            dmRooms: new Map(), 
+            isTyping: false,
+            typingTimer: null,
+            editingMessageId: null, 
+            pinnedMessageId: null,
+            isUserScrolling: false,
+            
+            replyingToMessage: null, // New: Stores the message object being replied to
+
+            AVAILABLE_REACTIONS: ['👍', '❤️', '🔥', '😂', '🤯', '💡', '✅', '❌'],
+            
+            elements: {}, 
+            
+            send: function(data) {
+                if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                    this.ws.send(JSON.stringify(data));
+                } else {
+                    showNotification('Not connected to server. Please log in.', true);
+                }
+            },
+
+            // --- Initialization & Setup ---
+            init: function() {
+                this.elements = {
+                    loginModal: document.getElementById('login-modal'),
+                    mainApp: document.getElementById('main-app'),
+                    loginButton: document.getElementById('login-button'),
+                    registerButton: document.getElementById('register-button'),
+                    usernameInput: document.getElementById('username-input'),
+                    passwordInput: document.getElementById('password-input'),
+                    serverIpInput: document.getElementById('server-ip-input'),
+                    errorMessage: document.getElementById('error-message'),
+                    messagesDiv: document.getElementById('messages'), 
+                    messageInput: document.getElementById('message-input'),
+                    sendButton: document.getElementById('send-button'),
+                    fileButton: document.getElementById('file-button'),
+                    fileInput: document.getElementById('file-input'),
+                    uploadProgressBar: document.getElementById('upload-progress-bar'),
+                    uploadProgress: document.getElementById('upload-progress'),
+                    channelList: document.getElementById('channel-list'),
+                    dmList: document.getElementById('dm-list'), 
+                    currentUser: document.getElementById('current-user'),
+                    userRole: document.getElementById('user-role'),
+                    connectionStatus: document.getElementById('connection-status'),
+                    currentChannelDisplay: document.getElementById('current-channel-display'),
+                    typingIndicator: document.getElementById('typing-indicator'),
+                    usersOnlineHeader: document.getElementById('users-online'),
+                    activeUsersList: document.getElementById('active-users-list'),
+                    channelActiveUsers: document.getElementById('channel-active-users'),
+                    notificationToast: document.getElementById('notification-toast'), 
+                    notificationText: document.getElementById('notification-text'),
+                    themeToggle: document.getElementById('theme-toggle'), 
+                    editModal: document.getElementById('edit-modal'),
+                    editInput: document.getElementById('edit-input'),
+                    cancelEditButton: document.getElementById('cancel-edit-button'),
+                    saveEditButton: document.getElementById('save-edit-button'),
+                    pinnedBanner: document.getElementById('pinned-banner'),
+                    pinnedContent: document.getElementById('pinned-content'),
+                    jumpToPinned: document.getElementById('jump-to-pinned'),
+                    statusSelector: document.getElementById('status-selector'),
+                    commandHelp: document.getElementById('command-help'),
+                    messageFilterInput: document.getElementById('message-filter-input'),
+                    messagesContainer: document.getElementById('messages-container'),
+                    persistentId: document.getElementById('persistent-id'),
+                    sidebar: document.getElementById('sidebar'),
+                    mobileOverlay: document.getElementById('mobile-overlay'),
+                    channelModal: document.getElementById('channel-modal'),
+                    createChannelButton: document.getElementById('create-channel-button'),
+                    joinChannelButton: document.getElementById('join-channel-button'),
+                    openChannelModal: document.getElementById('open-channel-modal'), 
+                    replyContextArea: document.getElementById('reply-context-area'),
+                    replyTargetContent: document.getElementById('reply-target-content'),
+                    cancelReplyButton: document.getElementById('cancel-reply-button'),
+                    channelTypeIcon: document.getElementById('channel-type-icon'),
+                };
+                
+                initTheme();
+                this.bindEventListeners();
+                this.serverIp = this.elements.serverIpInput.value.trim();
+            },
+            
+            // --- Handlers (Defined FIRST to satisfy bindEventListeners) ---
+            
+            // AUTHENTICATION & CONNECTION HANDLERS
+            handleRegistration: async function() {
+                const username = this.elements.usernameInput.value.trim();
+                const password = this.elements.passwordInput.value.trim();
+                const PORT = 3000;
+                
+                if (!username || !password || !this.serverIp) { showError('All fields are required.'); return; }
+
+                try {
+                    this.elements.registerButton.disabled = true;
+                    this.elements.registerButton.textContent = 'Registering...';
+
+                    const response = await fetch(`http://${this.serverIp}:${PORT}/api/register`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        showError(`Registration Failed: ${data.error || response.statusText}`);
+                    } else {
+                        showNotification(`Registration successful for ${username}. Please log in.`, false);
+                    }
+                } catch (e) {
+                    console.error('Registration API Error:', e);
+                    showError(`Could not connect to server for registration. Check IP/Port.`);
+                } finally {
+                    this.elements.registerButton.disabled = false;
+                    this.elements.registerButton.textContent = 'Register';
+                }
+            },
+
+            handleLogin: async function() {
+                const username = this.elements.usernameInput.value.trim();
+                const password = this.elements.passwordInput.value.trim();
+                const PORT = 3000;
+                showError(''); 
+                
+                if (!username || !password || !this.serverIp) { showError('Login details are required.'); return; }
+                
+                try {
+                    this.elements.loginButton.disabled = true;
+                    this.elements.loginButton.textContent = 'Logging in...';
+
+                    const response = await fetch(`http://${this.serverIp}:${PORT}/api/login`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ username, password })
+                    });
+                    const data = await response.json();
+
+                    if (!response.ok) {
+                        showError(`Login Failed: ${data.error || response.statusText}`);
+                        return;
+                    }
+
+                    this.userId = data.userId;
+                    this.username = data.username;
+                    this.userRole = data.role;
+                    this.elements.persistentId.textContent = this.userId;
+                    
+                    this.connect(this.serverIp, PORT); 
+                    
+                } catch (e) {
+                    console.error('Login API Error:', e);
+                    showError(`Could not connect to server: ${e.message}`);
+                } finally {
+                    this.elements.loginButton.disabled = false;
+                    this.elements.loginButton.textContent = 'Login';
+                }
+            },
+
+            connect: function(ip, port) {
+                const url = `ws://${ip}:${port}`;
+                this.elements.connectionStatus.textContent = 'Connecting...';
+                this.elements.connectionStatus.classList.replace('text-red-500', 'text-yellow-500');
+
+                try {
+                    this.ws = new WebSocket(url);
+                } catch(e) {
+                    showError(`Failed to create WebSocket: ${e.message}`);
+                    return;
+                }
+                
+                this.ws.onopen = () => {
+                    this.elements.connectionStatus.textContent = 'Connected';
+                    this.elements.connectionStatus.classList.replace('text-yellow-500', 'text-green-500');
+                    
+                    this.send({ type: 'login', userId: this.userId, username: DOMPurify.sanitize(this.username) });
+                };
+                this.ws.onmessage = this.handleWsMessage.bind(this);
+                this.ws.onclose = this.handleWsClose.bind(this);
+                this.ws.onerror = (error) => { console.error('WS Error:', error); showNotification('A fatal WS error occurred.', true); };
+            },
+            
+            handleWsClose: function() {
+                this.elements.connectionStatus.textContent = 'Disconnected';
+                this.elements.connectionStatus.classList.replace('text-green-500', 'text-red-500');
+                this.elements.messageInput.disabled = true;
+                this.elements.sendButton.disabled = true;
+                this.elements.fileButton.disabled = true;
+                this.updateTypingIndicator([]);
+                this.handleKickedOrBanned('Connection lost. Please check server status or refresh.');
+            },
+            
+            handleKickedOrBanned: function(reason) {
+                this.elements.mainApp.classList.add('hidden');
+                this.elements.loginModal.classList.remove('hidden');
+                this.elements.loginButton.disabled = false;
+                this.elements.fileButton.disabled = true;
+                showError(`DISCONNECTED: ${reason}`);
+            },
+
+            // INPUT & MESSAGE HANDLERS
+            sendMessage: function() {
+                const content = this.elements.messageInput.value.trim();
+                if (content.length === 0 && !this.replyingToMessage && !this.elements.fileInput.files[0]) return;
+
+                const messageType = this.currentChannel.startsWith('DM:') ? 'send_dm' : 'send_message';
+                
+                const messageData = {
+                    type: messageType,
+                    content: content,
+                    channel: this.currentChannel 
+                };
+
+                // Add threading context if replying
+                if (this.replyingToMessage) {
+                    messageData.parent_message_id = this.replyingToMessage.id;
+                    this.clearReplyContext();
+                }
+
+                this.send(messageData);
+
+                this.elements.messageInput.value = '';
+                this.isTyping = false;
+                this.sendTypingUpdate(false);
+                this.elements.commandHelp.classList.add('hidden');
+            },
+
+            handleInputKeyPress: function(e) {
+                 if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    this.sendMessage();
+                 }
+            },
+            
+            handleInputUpdate: function() {
+                this.handleTypingActivity();
+                this.handleSlashCommandHelp();
+            },
+            handleInputFocus: function() { this.handleSlashCommandHelp(); },
+            handleInputBlur: function() { this.elements.commandHelp.classList.add('hidden'); },
+            
+            updateStatus: function() {
+                const newStatus = this.elements.statusSelector.value;
+                this.send({ type: 'send_message', content: `/status ${newStatus}` });
+            },
+
+            // FILE UPLOAD HANDLERS
+            handleFileSelection: function(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    this.uploadFile(file);
+                }
+            },
+
+            uploadFile: async function(file) {
+                this.elements.messageInput.disabled = true;
+                this.elements.sendButton.disabled = true;
+                this.elements.fileButton.disabled = true;
+                this.elements.uploadProgressBar.classList.remove('hidden');
+                
+                const formData = new FormData();
+                formData.append('chatFile', file);
+                
+                const xhr = new XMLHttpRequest();
+                
+                xhr.upload.addEventListener("progress", (e) => {
+                    if (e.lengthComputable) {
+                        const percent = Math.round((e.loaded / e.total) * 100);
+                        this.elements.uploadProgress.style.width = `${percent}%`;
+                    }
+                });
+
+                xhr.addEventListener("load", () => {
+                    this.elements.uploadProgressBar.classList.add('hidden');
+                    this.elements.uploadProgress.style.width = '0%';
+                    this.elements.fileInput.value = '';
+
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        if (xhr.status === 200 && response.fileData) {
+                            showNotification(`File uploaded: ${response.fileData.originalname}. Ready to send.`, false);
+                            
+                            const messageContent = this.elements.messageInput.value.trim() || `[File: ${response.fileData.originalname}]`;
+
+                            const messageType = this.currentChannel.startsWith('DM:') ? 'send_dm' : 'send_message';
+                            
+                            const messageData = {
+                                type: messageType,
+                                content: messageContent,
+                                channel: this.currentChannel,
+                                attachment: response.fileData
+                            };
+                            
+                            // Add threading context if replying
+                            if (this.replyingToMessage) {
+                                messageData.parent_message_id = this.replyingToMessage.id;
+                                this.clearReplyContext();
+                            }
+
+                            this.send(messageData);
+                            this.elements.messageInput.value = '';
+
+                        } else {
+                            const errorText = response.error || 'Server rejected the file.';
+                            showNotification(`Upload Failed: ${errorText}`, true);
+                        }
+                    } catch (e) {
+                        showNotification('Error parsing server response.', true);
+                    } finally {
+                        this.elements.messageInput.disabled = false;
+                        this.elements.sendButton.disabled = false;
+                        this.elements.fileButton.disabled = false;
+                    }
+                });
+
+                xhr.addEventListener("error", () => {
+                    showNotification('Network Error: Could not reach the server to upload file.', true);
+                    this.elements.uploadProgressBar.classList.add('hidden');
+                    this.elements.uploadProgress.style.width = '0%';
+                    this.elements.messageInput.disabled = false;
+                    this.elements.sendButton.disabled = false;
+                    this.elements.fileButton.disabled = false;
+                });
+                
+                xhr.open('POST', `http://${this.serverIp}:3000/api/upload`);
+                xhr.send(formData);
+            },
+            
+            // UI/UX HANDLERS
+            toggleTheme: function() {
+                const isDark = document.documentElement.classList.toggle('dark');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+                this.updateThemeToggle(isDark);
+            },
+            updateThemeToggle: function(isDark) {
+                this.elements.themeToggle.innerHTML = isDark 
+                    ? '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-400" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.88-2.67a1 1 0 01.35 1.5l-.26.26a1 1 0 01-1.5-.35l.26-.26a1 1 0 011.1-.35zM5.12 7.33a1 1 0 011.5-.35l.26.26a1 1 0 01-.35 1.5l-.26-.26a1 1 0 01-1.1-.35zM9.76 5.34a1 1 0 01-1.5.35l-.26-.26a1 1 0 01.35-1.5l.26.26a1 1 0 011.1.35zM4.88 12.67a1 1 0 01-.35-1.5l.26-.26a1 1 0 011.5.35l-.26.26a1 1 0 01-1.1.35zM10 16a1 1 0 01-1-1v-1a1 1 0 112 0v1a1 1 0 01-1 1z"/></svg>' 
+                    : '<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-700" viewBox="0 0 20 20" fill="currentColor"><path d="M17.293 13.626A8.98 8.98 0 0110 18a9 9 0 01-9-9 8.98 8.98 0 014.374-7.293 1 1 0 011.536 1.288 6.98 6.98 0 00-3.41 5.605 7 7 0 1010.518-8.818 1 1 0 011.287-1.536z"/></svg>';
+            },
+            
+            // MOBILE UX: Toggle Sidebar function for mobile screens
+            toggleSidebar: function(show) {
+                const sidebar = this.elements.sidebar;
+                const overlay = this.elements.mobileOverlay;
+
+                if (show === undefined) {
+                    show = sidebar.classList.contains('-translate-x-full');
+                }
+
+                if (show) {
+                    sidebar.classList.remove('-translate-x-full');
+                    overlay.classList.remove('hidden');
+                    document.body.style.overflow = 'hidden'; // Prevent scrolling the main content
+                } else {
+                    sidebar.classList.add('-translate-x-full');
+                    overlay.classList.add('hidden');
+                    document.body.style.overflow = 'auto'; 
+                }
+            },
+
+            // CHANNEL MANAGEMENT HANDLERS 
+            showChannelModal: function(show) {
+                if (show) {
+                    this.elements.channelModal.classList.remove('hidden');
+                } else {
+                    this.elements.channelModal.classList.add('hidden');
+                    document.getElementById('new-channel-name').value = '';
+                    document.getElementById('new-channel-private').checked = false;
+                    document.getElementById('join-invite-code').value = '';
+                }
+            },
+            
+            createChannel: function() {
+                const nameInput = document.getElementById('new-channel-name');
+                const isPrivate = document.getElementById('new-channel-private').checked;
+                let channelName = nameInput.value.trim();
+
+                if (!channelName.startsWith('#')) {
+                    channelName = '#' + channelName;
+                }
+                channelName = channelName.replace(/\s+/g, '-').replace(/[^\w#-]/g, '');
+
+                if (channelName.length < 3) {
+                    showNotification('Channel name must be at least 3 characters long.', true);
+                    return;
+                }
+                
+                this.send({ 
+                    type: 'create_channel', 
+                    channel: channelName, 
+                    isPrivate: isPrivate 
+                });
+                this.showChannelModal(false);
+            },
+
+            joinChannelByCode: function() {
+                const inviteCode = document.getElementById('join-invite-code').value.trim();
+                if (inviteCode.length < 5) {
+                    showNotification('Invite code too short.', true);
+                    return;
+                }
+                
+                this.send({ 
+                    type: 'join_channel_by_code', 
+                    code: inviteCode
+                });
+                this.showChannelModal(false);
+            },
+
+            // MESSAGE CRUD HANDLERS
+            showReplyContext: function(message) {
+                this.replyingToMessage = message;
+                // FIX: Use author name/content for better context display
+                let contentText = message.content.replace(/\n/g, ' ').trim();
+                this.elements.replyTargetContent.textContent = `${message.author}: ${contentText.length > 50 ? contentText.substring(0, 50) + '...' : contentText}`;
+                this.elements.replyContextArea.classList.remove('hidden');
+                this.elements.messageInput.focus();
+            },
+
+            clearReplyContext: function() {
+                this.replyingToMessage = null;
+                this.elements.replyTargetContent.textContent = '';
+                this.elements.replyContextArea.classList.add('hidden');
+            },
+
+            saveEditedMessage: function() {
+                if (!this.editingMessageId) return;
+                const newContent = this.elements.editInput.value.trim();
+                if (newContent.length > 0) {
+                    this.send({ type: 'edit_message', id: this.editingMessageId, content: newContent });
+                    this.hideEditModal();
+                } else {
+                    showError("Edited message cannot be empty.");
+                }
+            },
+            hideEditModal: function() {
+                this.elements.editModal.classList.add('hidden');
+                this.editingMessageId = null;
+                this.elements.editInput.value = '';
+            },
+
+            // --- BINDING METHOD ---
+
+            bindEventListeners: function() {
+                // Login/Register
+                this.elements.loginButton.addEventListener('click', this.handleLogin.bind(this));
+                this.elements.registerButton.addEventListener('click', this.handleRegistration.bind(this));
+                this.elements.serverIpInput.addEventListener('input', (e) => this.serverIp = e.target.value.trim());
+
+                // Theme
+                this.elements.themeToggle.addEventListener('click', this.toggleTheme.bind(this));
+                
+                // File Upload
+                this.elements.fileButton.addEventListener('click', () => this.elements.fileInput.click());
+                this.elements.fileInput.addEventListener('change', this.handleFileSelection.bind(this));
+                
+                // Chat Input & Controls
+                this.elements.messageInput.addEventListener('keypress', this.handleInputKeyPress.bind(this));
+                this.elements.messageInput.addEventListener('input', this.handleInputUpdate.bind(this));
+                this.elements.messageInput.addEventListener('focus', this.handleInputFocus.bind(this));
+                this.elements.messageInput.addEventListener('blur', this.handleInputBlur.bind(this));
+                this.elements.sendButton.addEventListener('click', this.sendMessage.bind(this));
+                this.elements.statusSelector.addEventListener('change', this.updateStatus.bind(this));
+                
+                // Reply Context
+                this.elements.cancelReplyButton.addEventListener('click', this.clearReplyContext.bind(this));
+                
+                // Modals
+                this.elements.openChannelModal.addEventListener('click', () => this.showChannelModal(true));
+                document.getElementById('close-channel-modal').addEventListener('click', () => this.showChannelModal(false));
+                this.elements.createChannelButton.addEventListener('click', this.createChannel.bind(this));
+                this.elements.joinChannelButton.addEventListener('click', this.joinChannelByCode.bind(this));
+                
+                // UX/Filters/Pins
+                this.elements.messagesDiv.addEventListener('scroll', this.handleScroll.bind(this));
+                this.elements.messageFilterInput.addEventListener('input', this.filterMessages.bind(this));
+                this.elements.jumpToPinned.addEventListener('click', this.jumpToPinnedMessage.bind(this));
+                // Edit Modal
+                this.elements.cancelEditButton.addEventListener('click', this.hideEditModal.bind(this));
+                this.elements.saveEditButton.addEventListener('click', this.saveEditedMessage.bind(this));
+
+                // Global click handler to close reaction menus
+                document.addEventListener('click', (e) => {
+                    // Check if the click is outside any reaction menu or add-reaction button
+                    if (!e.target.closest('.reaction-menu-container') && !e.target.closest('.reaction-menu') && !e.target.closest('.toggle-reaction-btn')) {
+                        document.querySelectorAll('.reaction-menu.active').forEach(menu => {
+                            menu.classList.remove('active');
+                        });
+                    }
+                });
+            },
+            
+            // --- WebSocket Handlers ---
+
+            handleWsMessage: function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    switch (data.type) {
+                        case 'initial_state':
+                            this.currentChannel = data.currentChannel;
+                            this.channels = data.availableChannels;
+                            this.renderSidebars();
+                            this.elements.currentUser.textContent = this.username;
+                            this.elements.loginModal.classList.add('hidden');
+                            this.elements.mainApp.classList.remove('hidden');
+                            this.elements.messageInput.disabled = false;
+                            this.elements.sendButton.disabled = false;
+                            this.elements.fileButton.disabled = false;
+                            this.updateChannelDisplay(this.currentChannel);
+                            break;
+                            
+                        case 'login_success':
+                            this.elements.currentUser.textContent = this.username;
+                            this.userRole = data.role;
+                            this.elements.userRole.textContent = this.userRole;
+                            this.elements.userRole.className = `text-xs font-semibold px-3 py-1 rounded-full ${this.userRole === 'Admin' ? 'bg-brand-indigo text-white' : 'bg-gray-300 dark:bg-gray-700'}`;
+                            this.elements.messageInput.placeholder = `Message ${this.currentChannel}... (Type '/' for commands)`;
+                            showNotification(`Welcome, ${this.username}! Role: ${this.userRole}`, false);
+                            break;
+                            
+                        case 'channel_list_update': 
+                            this.channels = data.availableChannels;
+                            this.renderChannels();
+                            showNotification('Channel list updated.', false);
+                            break;
+                        
+                        case 'message_history':
+                            this.elements.messagesDiv.innerHTML = '';
+                            data.messages.forEach(msg => this.displayMessage(msg, true));
+                            this.updatePinnedMessage(data.pinned);
+                            this.scrollToBottom();
+                            break;
+
+                        case 'channel_change':
+                            this.elements.messagesDiv.innerHTML = '';
+                            this.updateChannelDisplay(data.newChannel);
+                            this.channels = data.availableChannels; 
+                            data.history.forEach(msg => this.displayMessage(msg, true));
+                            this.updatePinnedMessage(data.pinned);
+                            this.renderSidebars();
+                            this.scrollToBottom();
+                            break;
+
+                        case 'channel_message': 
+                            this.displayMessage(data); 
+                            this.scrollToBottomIfNear();
+                            if (data.mentioned && data.channel === this.currentChannel) {
+                                showNotification(`You were mentioned by @${data.author} in ${data.channel}: ${data.content}`, false);
+                            }
+                            break;
+                        case 'message_edited': this.updateMessageContent(data); break;
+                        case 'message_deleted': this.removeMessage(data.id); break;
+                        case 'message_reacted': this.updateReactions(data.id, data.reactions); break;
+                        case 'update_pinned_message': this.updatePinnedMessage(data.message); break;
+                        case 'typing_status': this.updateTypingIndicator(data.typingUsers); break;
+                        case 'user_presence': this.updateActiveUsers(data.users); break;
+                        case 'mention_notification': showNotification(`You were mentioned by @${data.author} in ${data.room}: ${data.content}`, false); break;
+                        case 'notification': showNotification(data.message, false); break;
+                        case 'kicked': 
+                        case 'banned': this.handleKickedOrBanned(data.reason); break;
+                        case 'error': showNotification(data.message, true); break;
+                        default:
+                            console.warn("Received unknown message type:", data.type);
+                            showNotification('Received unknown server message type.', true);
+                    }
+                } catch (e) {
+                    console.error('Error handling server message:', e);
+                    showNotification('Internal error processing server message.', true);
+                }
+            },
+            
+            // --- Utility Functions ---
+
+            scrollToBottom: function() { this.elements.messagesDiv.scrollTop = this.elements.messagesDiv.scrollHeight; },
+            handleScroll: function() {
+                const { scrollTop, scrollHeight, clientHeight } = this.elements.messagesDiv;
+                this.isUserScrolling = (scrollHeight - scrollTop - clientHeight) > 100;
+            },
+            scrollToBottomIfNear: function() { if (!this.isUserScrolling) this.scrollToBottom(); },
+            
+            updateTypingIndicator: function(typingUsers) {
+                const othersTyping = typingUsers.filter(user => user !== this.username);
+                const indicator = this.elements.typingIndicator;
+                
+                if (othersTyping.length === 0) {
+                    indicator.classList.add('hidden');
+                } else {
+                    indicator.classList.remove('hidden');
+                    let text = othersTyping.length === 1 
+                        ? `${othersTyping[0]} is typing...`
+                        : `${othersTyping.slice(0, 2).join(' and ')}${othersTyping.length > 2 ? ` and ${othersTyping.length - 2} more` : ''} are typing...`;
+                    indicator.innerHTML = `<span class="italic text-brand-indigo dark:text-indigo-400 font-medium">${text}</span>`;
+                }
+            },
+            handleTypingActivity: function() {
+                if (!this.isTyping) {
+                    this.isTyping = true;
+                    this.sendTypingUpdate(true);
+                }
+                clearTimeout(this.typingTimer);
+                this.typingTimer = setTimeout(() => {
+                    this.isTyping = false;
+                    this.sendTypingUpdate(false);
+                }, 3000);
+            },
+            sendTypingUpdate: function(status) {
+                this.send({ type: 'typing_update', isTyping: status });
+            },
+            handleSlashCommandHelp: function() {
+                const content = this.elements.messageInput.value;
+                if (content.startsWith('/')) {
+                    this.elements.commandHelp.classList.remove('hidden');
+                    this.elements.messageInput.placeholder = `Message ${this.currentChannel}... (Command Mode)`;
+                } else {
+                    this.elements.commandHelp.classList.add('hidden');
+                    this.elements.messageInput.placeholder = `Message ${this.currentChannel}... (Type '/' for commands)`;
+                }
+            },
+            
+            // --- Channel / DM Logic ---
+            
+            getDmRoomName: function(id1, id2) { return [id1, id2].sort().join('-'); },
+            getDmPartnerName: function(roomName) {
+                 if (roomName.startsWith('DM:')) {
+                    // Try to deduce partner ID from room name
+                    const [idA, idB] = roomName.substring(3).split('-');
+                    const partnerId = (idA === this.userId) ? idB : idA;
+                    
+                    // Look up partner's username in dmRooms map (which is populated via activeUsers)
+                    let partner = null;
+                    this.dmRooms.forEach(p => {
+                        if (p.id === partnerId) partner = p;
+                    });
+
+                    return partner ? partner.username : 'Unknown User';
+                 }
+                 return roomName;
+            },
+            renderSidebars: function() { this.renderChannels(); this.renderDMRooms(); },
+            
+            renderChannels: function() {
+                const html = this.channels.map(channel => {
+                    const isActive = channel.name === this.currentChannel;
+                    const icon = channel.is_private ? '🔒' : '#';
+                    
+                    const canDelete = this.userRole === 'Admin' || channel.created_by === this.userId;
+                    const isDefaultChannel = channel.name === '#general';
+                    // Unified button style for better UX
+                    return `<div class="group flex items-center w-full">
+                                <button onclick="app.joinChannel('${channel.name}')" class="flex-1 flex items-center space-x-2 text-left p-3 rounded-xl transition duration-150 font-medium ${isActive ? 'bg-brand-indigo text-white shadow-lg' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-tertiary-dark'}">
+                                    <span class="text-base">${icon}</span> <span class="truncate">${channel.name.replace('#', '')}</span>
+                                </button>
+                                ${this.userRole === 'Admin' 
+                                    ? `<button onclick="event.stopPropagation(); app.deleteChannel('${channel.name}')" class="p-1 rounded-full text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition ml-2" title="Delete Channel">
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                        </button>` 
+                                    : ''}
+                            </div>`;
+                }).join('');
+                this.elements.channelList.innerHTML = html;
+            },
+            
+            deleteChannel: function(channelName) {
+                if (confirm(`Are you sure you want to delete the channel ${channelName}? This action is irreversible and deletes all messages.`)) {
+                    this.send({ type: 'delete_channel', channel: channelName });
+                }
+            },
+
+            renderDMRooms: function() {
+                let html = '';
+                if (this.dmRooms.size === 0) {
+                    html = '<p class="text-gray-500 dark:text-gray-400 text-sm italic p-2 rounded-lg bg-gray-300/50 dark:bg-tertiary-dark/50">Click an active user to start a DM.</p>';
+                } else {
+                    html = Array.from(this.dmRooms.entries()).map(([roomName, partner]) => {
+                        const isActive = roomName === this.currentChannel;
+                        // Use brand-purple for DMs for visual distinction
+                        return `<button onclick="app.joinDM('${roomName}')" class="w-full text-left p-3 rounded-xl transition duration-150 font-medium ${isActive ? 'bg-brand-purple text-white shadow-lg' : 'text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-tertiary-dark'}">@ ${partner.username}</button>`;
+                    }).join('');
+                }
+                this.elements.dmList.innerHTML = html;
+            },
+            
+            updateChannelDisplay: function(newChannel) {
+                this.currentChannel = newChannel;
+                const isDM = newChannel.startsWith('DM:');
+                const channelData = this.channels.find(c => c.name === newChannel);
+                
+                let displayTitle = isDM ? `@ ${this.getDmPartnerName(newChannel)}` : newChannel;
+                
+                // Update header title and color
+                const baseClasses = 'text-2xl lg:text-3xl font-extrabold transition-colors duration-300';
+                const colorClasses = isDM 
+                    ? 'text-brand-purple dark:text-purple-400' 
+                    : 'text-brand-indigo dark:text-indigo-400';
+                this.elements.currentChannelDisplay.className = `${baseClasses} ${colorClasses}`;
+                this.elements.currentChannelDisplay.textContent = displayTitle;
+                this.elements.messageInput.placeholder = `Message ${displayTitle}... (Type '/' for commands)`;
+                
+                // Update channel type icon
+                let iconHtml = '';
+                if (isDM) {
+                    iconHtml = '<span title="Direct Message (Private)">🔒</span>';
+                } else if (channelData && channelData.is_private) {
+                    iconHtml = '<span title="Private Channel">🔒</span>';
+                } else {
+                    iconHtml = '<span title="Public Channel">#</span>';
+                }
+                this.elements.channelTypeIcon.innerHTML = iconHtml;
+
+                this.renderSidebars();
+            },
+            
+            joinChannel: function(channelName) { 
+                 if (channelName !== this.currentChannel) { 
+                    this.send({ type: 'join_channel', channel: channelName }); 
+                    this.toggleSidebar(false); // Close sidebar on mobile after selection
+                 } 
+            },
+            
+            startDM: function(targetUserId, targetUsername) {
+                const dmRoomName = `DM:${this.getDmRoomName(this.userId, targetUserId)}`;
+                if (!this.dmRooms.has(dmRoomName)) { this.dmRooms.set(dmRoomName, { username: targetUsername, id: targetUserId }); }
+                this.joinDM(dmRoomName);
+                this.toggleSidebar(false); // Close sidebar on mobile after selection
+            },
+            joinDM: function(roomName) {
+                const partner = this.dmRooms.get(roomName);
+                if (roomName !== this.currentChannel && partner) { this.send({ type: 'start_dm', targetUserId: partner.id }); }
+            },
+            
+            // --- Rendering/Display Logic (Part of Message Flow) ---
+            
+            renderAttachment: function(attachment, isMyMessage) {
+                const baseUrl = `http://${this.serverIp}:3000/uploads/`;
+                const fileUrl = `${baseUrl}${attachment.filename}`;
+                const fileSizeKB = (attachment.size / 1024).toFixed(2);
+                
+                const cardClass = isMyMessage 
+                    ? 'bg-indigo-700/80 text-indigo-100 border-indigo-500' 
+                    : 'bg-gray-200 dark:bg-tertiary-dark text-gray-800 dark:text-gray-200 border-gray-400 dark:border-gray-600';
+
+                let contentHtml = '';
+                if (attachment.mimetype.startsWith('image/')) {
+                    contentHtml = `
+                        <a href="${fileUrl}" target="_blank" class="block">
+                            <img src="${fileUrl}" onerror="this.onerror=null; this.src='https://placehold.co/200x150/AAAAAA/FFFFFF?text=Image+Load+Fail';" 
+                                class="rounded-xl shadow-lg max-h-56 w-full object-cover mb-2 transition-transform duration-300 hover:scale-[1.02] cursor-pointer">
+                        </a>
+                    `;
+                } else {
+                    const icon = attachment.mimetype === 'application/pdf' ? '📄' : (attachment.mimetype === 'text/plain' ? '📝' : '📎');
+                    contentHtml = `
+                        <div class="flex items-center space-x-3">
+                            <span class="text-3xl">${icon}</span>
+                            <div class="flex flex-col truncate">
+                                <a href="${fileUrl}" target="_blank" class="font-bold underline truncate hover:no-underline text-base">${attachment.originalname}</a>
+                                <span class="text-xs opacity-80">${fileSizeKB} KB, ${attachment.mimetype}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                return `<div class="p-3 mt-3 rounded-xl border-2 ${cardClass} shadow-xl">${contentHtml}</div>`;
+            },
+            
+            // Function to fetch the parent message content for the context box
+            getReplyContextHtml: function(parentMessageId) {
+                 if (!parentMessageId) return '';
+                
+                // Get the delete/edit button of the parent message to safely retrieve the original content
+                const parentButton = document.querySelector(`#msg-${parentMessageId} button[data-content]`);
+                if (!parentButton) return '';
+                
+                // Get the original content from the data attribute (safe against rendering changes)
+                const originalContent = parentButton.dataset.content || '... original message deleted ...';
+                
+                // Get the author from the rendered message header
+                const parentWrapper = document.getElementById(`msg-${parentMessageId}`);
+                const author = parentWrapper?.querySelector('.font-semibold')?.textContent || 'a user';
+
+                const truncatedContent = originalContent.replace(/[\n*`]/g, ' ').trim().length > 80 
+                    ? originalContent.replace(/[\n*`]/g, ' ').trim().substring(0, 80) + '...' 
+                    : originalContent.replace(/[\n*`]/g, ' ').trim();
+
+                return `
+                    <div class="reply-context text-xs italic text-gray-500 dark:text-gray-400 cursor-pointer hover:text-brand-indigo dark:hover:text-indigo-400" 
+                         onclick="app.jumpToMessage('${parentMessageId}')"
+                         title="Jump to parent message">
+                        Replying to ${author}:
+                        <span class="font-medium truncate block">${truncatedContent}</span>
+                    </div>
+                `;
+            },
+            
+            // Function to jump to any message, used for threads/pins
+            jumpToMessage: function(messageId) {
+                const messageElement = document.getElementById(`msg-${messageId}`);
+                if (messageElement) {
+                    messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Highlight effect
+                    messageElement.classList.add('bg-indigo-100', 'dark:bg-indigo-900', 'ring-4', 'ring-yellow-500');
+                    setTimeout(() => {
+                        messageElement.classList.remove('bg-indigo-100', 'dark:bg-indigo-900', 'ring-4', 'ring-yellow-500');
+                    }, 2000);
+                }
+            },
+
+            displayMessage: function(data, isHistory = false) {
+                const messageChannel = data.channel || '';
+    
+                const { content: highlightedContent, mentioned } = this.highlightContent(data.content || '');
+                const contentHtml = DOMPurify.sanitize(marked.parse(highlightedContent), {USE_PROFILES: {html: true}});
+
+                const isSystem = data.system;
+                const isMyMessage = data.authorId === this.userId;
+                const isDM = messageChannel.startsWith('DM:');
+                // Ensure we only render messages for the current view
+                if (!isHistory && data.channel !== this.currentChannel) return;
+
+                const messageClass = isSystem 
+                    ? 'text-center italic text-sm text-gray-500 dark:text-gray-400' 
+                    : (isMyMessage ? 'self-end bg-brand-indigo text-white' : 'self-start bg-white dark:bg-tertiary-dark dark:text-gray-100');
+                const messageTailwind = isSystem 
+                    ? 'py-2 px-4 w-full' 
+                    : 'max-w-4xl p-4 rounded-3xl shadow-lg border border-gray-200 dark:border-gray-700 group relative message-bubble ' + 
+                        (isMyMessage ? 'rounded-br-lg' : 'rounded-tl-lg'); 
+                
+                const editedStatus = data.edited 
+                    ? `<span class="text-xs opacity-80 ml-2 ${isMyMessage ? 'text-indigo-200' : 'text-gray-500 dark:text-gray-400'}" title="Edited at ${formatTime(data.editedTimestamp, true)}">(edited)</span>` : '';
+                const authorDisplay = DOMPurify.sanitize(data.author);
+
+                // Important: Add data-content to edit/delete buttons for reply logic to grab original content
+                const safeContent = data.content ? data.content.replace(/"/g, '&quot;') : '';
+
+                const editDeleteButtons = !isSystem ? `
+                    <div class="context-menu absolute -right-2 top-0 mt-[-1.5rem] mr-2 flex space-x-2 opacity-0 transition duration-300 z-30 bg-gray-700/80 backdrop-blur-sm p-1.5 rounded-full shadow-xl">
+                        ${(isMyMessage || this.userRole === 'Admin' || this.userRole === 'Moderator') 
+                            ? `<button data-id="${data.id}" data-content="${safeContent}" onclick="app.deleteMessage(this.dataset.id)" class="p-1 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs transition transform hover:scale-110" title="Delete">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+                                </button>`
+                            : ''}
+                        ${isMyMessage 
+                            ? `<button data-id="${data.id}" data-content="${safeContent}" onclick="app.showEditModal(this)" class="p-1 rounded-full bg-gray-500 hover:bg-gray-600 text-white text-xs transition transform hover:scale-110" title="Edit">
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                                </button>`
+                            : ''}
+                           <button onclick="app.showReplyContext({id: '${data.id}', author: '${authorDisplay}', content: '${safeContent}'})" class="p-1 rounded-full bg-gray-500 hover:bg-gray-600 text-white text-xs transition transform hover:scale-110" title="Reply">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.153C4.851 15.022 7.19 14 10 14c4.97 0 9-3.582 9-8s-4.03-8-9-8-9 3.582-9 8h4a5 5 0 005 5v2a1 1 0 01-1 1H5a1 1 0 01-1-1v-2a5 5 0 00-5 5z"></path></svg>
+                            </button>
+                    </div>` : '';
+
+                const attachmentHtml = data.attachment 
+                    ? this.renderAttachment(data.attachment, isMyMessage) 
+                    : '';
+                
+                const systemExtra = (isSystem && data.content.includes('created! Invite code:')) ? `<span class="text-xs ml-2 text-green-500 dark:text-green-400 font-mono p-1 rounded bg-green-500/10">Invite Code: ${data.content.split(': ')[1]}</span>` : '';
+                
+                // New: Reply/Thread context
+                const replyContextHtml = data.parent_message_id ? this.getReplyContextHtml(data.parent_message_id) : '';
+
+                const html = `
+                    <div class="message-wrapper flex flex-col ${isSystem ? 'items-center' : (isMyMessage ? 'items-end' : 'items-start')} ${mentioned ? 'mentioned p-3 rounded-2xl' : ''}" id="msg-${data.id || data.timestamp}">
+                        <div class="flex items-center space-x-2 ${isMyMessage ? 'flex-row-reverse space-x-reverse' : ''} ${isSystem ? 'hidden' : 'mb-1'}">
+                            <span class="text-sm font-semibold text-gray-700 dark:text-gray-300">${authorDisplay}</span>
+                            <span class="text-xs text-gray-400" title="${formatTime(data.timestamp, true)}">${formatTime(data.timestamp)}</span>
+                        </div>
+                        <div class="message-content-box ${messageClass} ${messageTailwind}">
+                            ${editDeleteButtons}
+                            ${replyContextHtml}
+                            <div class="markdown-content text-base" data-id="${data.id}" data-original-content="${safeContent}" id="content-${data.id}">
+                                ${contentHtml}
+                            </div>
+                            ${attachmentHtml}
+                            <div class="edited-status text-right text-xs mt-1" id="edited-${data.id}">
+                                ${editedStatus}
+                            </div>
+                        </div>
+                        <div id="reactions-${data.id}" class="mt-1 flex space-x-2 items-center ${isSystem ? 'justify-center' : (isMyMessage ? 'self-end' : 'self-start')}">
+                            ${systemExtra}
+                        </div>
+                    </div>
+                `;
+                
+                this.elements.messagesDiv.insertAdjacentHTML(isHistory ? 'afterbegin' : 'beforeend', html);
+                
+                if (data.id && !isSystem) {
+                    this.renderReactions(data.id, data.reactions);
+                }
+            },
+
+            // --- Other Utilities ---
+            
+            getStatusColor: (status) => {
+                switch (status) {
+                    case 'online': return 'bg-green-500';
+                    case 'away': return 'bg-yellow-500';
+                    case 'dnd': return 'bg-red-500';
+                    default: return 'bg-gray-500';
+                }
+            },
+            
+            updateActiveUsers: function(users) {
+                const allActiveUsers = users.sort((a, b) => {
+                    if (a.status === 'online' && b.status !== 'online') return -1;
+                    if (a.status !== 'online' && b.status === 'online') return 1;
+                    return a.username.localeCompare(b.username);
+                });
+                this.elements.usersOnlineHeader.textContent = `${allActiveUsers.length} users online`;
+                let html = '';
+                
+                // Clear and re-map dmRooms based on current active users
+                const newDmRooms = new Map();
+                
+                allActiveUsers.forEach(user => {
+                    if (user.id === this.userId) {
+                        this.elements.statusSelector.value = user.status;  
+                        this.userRole = user.role;
+                        this.elements.userRole.textContent = user.role;
+                        this.elements.userRole.className = `text-xs font-semibold px-3 py-1 rounded-full ${this.userRole === 'Admin' ? 'bg-brand-indigo text-white' : 'bg-gray-300 dark:bg-gray-700'}`;
+                        return; 
+                    }
+                    const statusColor = this.getStatusColor(user.status);
+                    
+                    const dmRoomName = `DM:${this.getDmRoomName(this.userId, user.id)}`;
+                    newDmRooms.set(dmRoomName, { username: user.username, id: user.id });
+                    
+                    const isDMActive = this.currentChannel === dmRoomName; // Check if THIS DM is the active chat
+
+                    html += `
+                        <div data-id="${user.id}" data-username="${user.username}"
+                              class="flex items-center justify-between p-3 rounded-xl hover:bg-gray-300 dark:hover:bg-tertiary-dark transition cursor-pointer ${isDMActive ? 'bg-gray-300 dark:bg-gray-700 shadow-inner' : ''}"
+                              onclick="app.startDM(this.dataset.id, this.dataset.username)">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-3.5 h-3.5 rounded-full ${statusColor} shadow-md border-2 border-white dark:border-secondary-dark" title="${user.status}"></div>
+                                <span class="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">${user.username}</span>
+                                <span class="text-xs font-semibold ${user.role === 'Admin' ? 'text-brand-indigo' : (user.role === 'Moderator' ? 'text-green-500' : 'text-gray-500')} dark:text-gray-400">${user.role === 'Admin' ? '[A]' : (user.role === 'Moderator' ? '[M]' : '')}</span>
+                            </div>
+                            <span class="text-xs text-brand-purple dark:text-purple-400 font-bold">DM</span>
+                        </div>
+                    `;
+                });
+                this.dmRooms = newDmRooms; // Update the client's DM room list
+                
+                this.elements.activeUsersList.innerHTML = html || '<p class="text-gray-500 dark:text-gray-400 text-sm italic p-2 rounded-lg bg-gray-300/50 dark:bg-tertiary-dark/50">No other users online.</p>';
+                this.elements.channelActiveUsers.textContent = `Users in room: ${users.map(u => u.username).join(', ')}`;
+                this.renderDMRooms(); 
+            },
+            
+            highlightContent: function(content) {
+                // Use the client's actual username for robust highlighting
+                const escapedUsername = (this.username || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                const mentionRegex = new RegExp(`@${escapedUsername}(?!\\w)`, 'gi');
+                
+                let mentioned = content.match(mentionRegex) !== null;
+                
+                // 1. Highlight current user's mention
+                content = content.replace(mentionRegex, `<span class="bg-yellow-400 text-gray-900 font-extrabold p-0.5 rounded-md">@${this.username}</span>`);
+                
+                // 2. Highlight other mentions (must not overlap with the highlighted mention from step 1)
+                content = content.replace(/@(\w+)/g, (match, username) => {
+                    // Check if the match is already wrapped by the bold yellow span (to prevent re-wrapping)
+                    if (match.includes('bg-yellow-400')) {
+                        return match;
+                    }
+                    return `<span class="text-brand-indigo font-semibold p-0.5 rounded-md hover:bg-indigo-100 dark:hover:bg-indigo-900 transition">@${username}</span>`;
+                });
+
+                // 3. Link/Preview logic
+                content = content.replace(/(https?:\/\/[^\s]+)/g, (url) => {
+                    const sanitizedUrl = DOMPurify.sanitize(url);
+                    return `<a href="${sanitizedUrl}" target="_blank" class="text-brand-indigo hover:text-indigo-300 underline font-medium">${sanitizedUrl}</a>
+                                <div class="bg-gray-100 dark:bg-gray-800 p-3 mt-2 rounded-xl border border-gray-300 dark:border-gray-600 text-sm shadow-inner transition hover:shadow-md">
+                                    <p class="font-bold text-gray-700 dark:text-gray-300">Link Preview (Mock)</p>
+                                    <p class="text-gray-600 dark:text-gray-400 truncate">${sanitizedUrl}</p>
+                                </div>`;
+                });
+                
+                return { content, mentioned };
+            },
+            
+            updateMessageContent: function(data) {
+                const messageBox = this.elements.messagesDiv.querySelector(`#content-${data.id}`);
+                const editedStatusDiv = this.elements.messagesDiv.querySelector(`#edited-${data.id}`);
+                const deleteButton = this.elements.messagesDiv.querySelector(`#msg-${data.id} button[data-id="${data.id}"][onclick*="deleteMessage"]`);
+                const editButton = this.elements.messagesDiv.querySelector(`#msg-${data.id} button[data-id="${data.id}"][onclick*="showEditModal"]`);
+                const isMyMessage = data.authorId === this.userId;
+                
+                if (messageBox) {
+                    const { content: highlightedContent } = this.highlightContent(data.content || '');
+                    messageBox.innerHTML = DOMPurify.sanitize(marked.parse(highlightedContent), {USE_PROFILES: {html: true}});
+                    messageBox.dataset.originalContent = data.content ? data.content.replace(/"/g, '&quot;') : '';
+
+                    // Update the data-content attributes on the buttons for replies/edits
+                    if(deleteButton) deleteButton.dataset.content = data.content ? data.content.replace(/"/g, '&quot;') : '';
+                    if(editButton) editButton.dataset.content = data.content ? data.content.replace(/"/g, '&quot;') : '';
+                    
+                    if (editedStatusDiv) {
+                        const statusClass = isMyMessage ? 'text-indigo-200' : 'text-gray-500 dark:text-gray-400';
+                        editedStatusDiv.innerHTML = `<span class="text-xs opacity-80 ml-2 ${statusClass}" title="Edited at ${formatTime(data.editedTimestamp, true)}">(edited)</span>`;
+                    }
+                }
+            },
+            
+            removeMessage: function(id) {
+                const wrapper = this.elements.messagesDiv.querySelector(`#msg-${id}`);
+                if (wrapper) {
+                    wrapper.style.opacity = 0;
+                    wrapper.style.height = 0;
+                    wrapper.style.margin = 0;
+                    setTimeout(() => wrapper.remove(), 300);
+                }
+            },
+            
+            showEditModal: function(button) {
+                this.editingMessageId = button.dataset.id;
+                this.elements.editInput.value = button.dataset.content;
+                this.elements.editModal.classList.remove('hidden');
+                this.elements.editInput.focus();
+            },
+
+            deleteMessage: function(id) { 
+                if (confirm('Are you sure you want to delete this message? This action is permanent.')) {
+                    this.send({ type: 'delete_message', id: id }); 
+                }
+            },
+            
+            updatePinnedMessage: function(message) {
+                if (message) {
+                    this.pinnedMessageId = message.id;
+                    const contentHtml = DOMPurify.sanitize(marked.parse(message.content), {USE_PROFILES: {html: true}});
+                    this.elements.pinnedContent.innerHTML = contentHtml;
+                    this.elements.pinnedBanner.classList.remove('hidden');
+                } else {
+                    this.pinnedMessageId = null;
+                    this.elements.pinnedBanner.classList.add('hidden');
+                }
+            },
+            jumpToPinnedMessage: function() {
+                this.jumpToMessage(this.pinnedMessageId);
+            },
+            
+            toggleReactionMenu: function(button) {
+                const menu = button.nextElementSibling;
+                const isActive = menu.classList.contains('active');
+                
+                // Close all other menus
+                document.querySelectorAll('.reaction-menu.active').forEach(m => {
+                    if (m !== menu) m.classList.remove('active');
+                });
+                
+                // Toggle the clicked menu
+                if (isActive) {
+                    menu.classList.remove('active');
+                } else {
+                    menu.classList.add('active');
+                }
+            },
+
+            toggleReaction: function(messageId, emoji) {
+                // Close all menus first
+                document.querySelectorAll('.reaction-menu.active').forEach(menu => menu.classList.remove('active'));
+
+                const reactionBox = document.getElementById(`reaction-${messageId}-${emoji}`);
+                const type = reactionBox && reactionBox.classList.contains('bg-brand-indigo') ? 'remove_reaction' : 'add_reaction';
+                this.send({ type, id: messageId, emoji });
+            },
+
+            updateReactions: function(messageId, reactions = {}) {
+                this.renderReactions(messageId, reactions);
+            },
+
+            renderReactions: function(messageId, reactions = {}) {
+                const reactionsContainer = document.getElementById(`reactions-${messageId}`);
+                if (!reactionsContainer) return;
+                reactionsContainer.innerHTML = '';
+                const isMyMessage = this.elements.messagesDiv.querySelector(`#msg-${messageId} .message-content-box`)?.classList.contains('bg-brand-indigo');
+                
+                // Render existing reactions
+                Object.entries(reactions).forEach(([emoji, userIds]) => {
+                    const count = userIds.length;
+                    const didUserReact = userIds.includes(this.userId);
+                    if (count > 0) {
+                           const classNames = didUserReact 
+                               ? 'bg-brand-indigo text-white dark:bg-indigo-700 ring-2 ring-brand-indigo' 
+                               : 'bg-gray-300 hover:bg-gray-400 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-100';
+                           reactionsContainer.insertAdjacentHTML('beforeend', `
+                               <button id="reaction-${messageId}-${emoji}" data-id="${messageId}" data-emoji="${emoji}" onclick="app.toggleReaction(this.dataset.id, this.dataset.emoji)"
+                                        class="text-sm p-1 px-3 rounded-full flex items-center space-x-1 transition duration-100 cursor-pointer shadow-sm ${classNames}">
+                                   <span>${emoji}</span>
+                                   <span class="font-bold">${count}</span>
+                               </button>`);
+                    }
+                });
+                // Render the add reaction button
+                const addClasses = isMyMessage ? 'text-indigo-200 hover:text-white' : 'text-gray-500 dark:text-gray-400 hover:text-brand-indigo';
+                reactionsContainer.insertAdjacentHTML('beforeend', this.renderAddReactionButton(messageId, addClasses));
+            },
+            
+            renderAddReactionButton: function(messageId, colorClasses) {
+                 return `
+                    <div class="reaction-menu-container inline-block">
+                        <button onclick="app.toggleReactionMenu(this)" class="p-1.5 rounded-full ${colorClasses} transition duration-150 text-base hover:bg-gray-200 dark:hover:bg-tertiary-dark toggle-reaction-btn" title="Add reaction">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3m0 0v3m0-3h3m-3 0H9m12 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                        </button>
+                        <div class="reaction-menu bg-white dark:bg-secondary-dark p-3 rounded-xl shadow-2xl border border-gray-400 dark:border-gray-600">
+                            ${this.AVAILABLE_REACTIONS.map(emoji => `
+                                <span data-id="${messageId}" data-emoji="${emoji}" onclick="app.toggleReaction(this.dataset.id, this.dataset.emoji)" 
+                                        class="text-2xl p-2 hover:bg-gray-200 dark:hover:bg-tertiary-dark rounded-lg cursor-pointer transition duration-100 transform hover:scale-110">${emoji}</span>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            },
+            
+            filterMessages: function() {
+                const filterText = this.elements.messageFilterInput.value.toLowerCase().trim();
+                this.elements.messagesDiv.querySelectorAll('.message-wrapper').forEach(wrapper => {
+                    const content = wrapper.querySelector('.markdown-content')?.textContent.toLowerCase() || '';
+                    const author = wrapper.querySelector('.font-semibold')?.textContent.toLowerCase() || '';
+                    if (filterText === '' || content.includes(filterText) || author.includes(filterText)) {
+                        wrapper.classList.remove('hidden-by-filter');
+                    } else {
+                        wrapper.classList.add('hidden-by-filter');
+                    }
+                });
+            },
+        };
+
+        window.app = app; // Expose app object globally
+
+        window.onload = () => app.init();
+    </script>
+</body>
+</html>
