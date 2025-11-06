@@ -104,11 +104,11 @@ The following features are fully implemented in the current application code:
 | | File Uploads | ✅ Ready | Uses Express/Multer via HTTP POST to handle uploads (Max 5MB), with whitelisting for security (images, PDF, text). |
 | | Threading / Replies | ✅ Ready | Users can reply to any message, linking the messages in a hierarchical structure. |
 | | Message Reactions | ✅ Ready | Users can add/remove emoji reactions, which are persisted to the database. |
-| | User/UX | Authentication | ✅ Ready | Login/Registration using HTTP API and WebSocket handshake. |
+| User/UX | Authentication | ✅ Ready | Login/Registration using HTTP API and WebSocket handshake. |
 | | Role System | ✅ Ready | Users are assigned `User`, `Moderator`, or `Admin` roles based on username prefix during registration. |
 | | Real-time Status | ✅ Ready | Users can set their status (`online`, `away`, `dnd`), visible in the user list. |
 | | Dark Mode | ✅ Ready | UI supports switching between light and dark themes. |
-| | Admin/Mod | Message Management | ✅ Ready | Authors can edit their messages (with TTL). Mods/Admins can delete any message. |
+| Admin/Mod | Message Management | ✅ Ready | Authors can edit their messages (with TTL). Mods/Admins can delete any message. |
 | | Pinnable Messages | ✅ Ready | Admins can use `/pin [ID]` to pin messages to the channel banner. |
 
 ---
